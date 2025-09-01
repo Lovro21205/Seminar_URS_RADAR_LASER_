@@ -1,0 +1,17 @@
+../Core/Src/main.c:114:6:Laser_Control	2
+../Core/Src/main.c:123:6:Check_Laser_Timeout	3
+../Core/Src/main.c:130:6:Servo_Set_Angle	2
+../Core/Src/main.c:138:6:Set_LED_Mod1	1
+../Core/Src/main.c:142:6:Set_LED_Mod2	1
+../Core/Src/main.c:146:6:Set_LED_Mod3	1
+../Core/Src/main.c:151:6:Update_Mode_LEDs	6
+../Core/Src/main.c:179:6:HCSR04_Start_With_Filter	1
+../Core/Src/main.c:189:6:Stepper_Update	6
+../Core/Src/main.c:215:6:Stepper_Turn_To_Exact_Position	4
+../Core/Src/main.c:233:6:Track_Closest_Object	4
+../Core/Src/main.c:244:6:HAL_TIM_IC_CaptureCallback	10
+../Core/Src/main.c:294:6:HAL_GPIO_EXTI_Callback	7
+../Core/Src/main.c:318:6:Handle_Button_Presses	4
+../Core/Src/main.c:360:5:main	38
+../Core/Src/main.c:571:6:SystemClock_Config	3
+../Core/Src/main.c:610:6:Error_Handler	1

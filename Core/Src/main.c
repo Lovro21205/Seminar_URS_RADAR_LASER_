@@ -48,6 +48,7 @@ uint16_t current_pulse_value = 0;
 
 extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim14;
+extern TIM_HandleTypeDef htim16;  // Timer za debounce
 
 // varijable stepper
 int32_t stepper_position = 0;
@@ -69,9 +70,9 @@ uint8_t stepper_index = 0;
 
 // Modovi rada(varijable dos)
 uint8_t operation_mode = 1;
-uint8_t button1_pressed = 0;
-uint8_t button2_pressed = 0;
-uint8_t button3_pressed = 0;
+volatile uint8_t button1_pressed_flag = 0;
+volatile uint8_t button2_pressed_flag = 0;
+volatile uint8_t button3_pressed_flag = 0;
 uint32_t mode2_timer = 0;
 uint8_t mode2_active = 0;
 uint8_t mode2_servo_stopped = 0;
@@ -88,11 +89,12 @@ uint8_t led_blink_state = 0;
 uint32_t last_blink_time = 0;
 #define BLINK_INTERVAL 500 // 500ms za treptanje
 
-// VArijable za debouncing
-uint32_t last_button1_time = 0;
-uint32_t last_button2_time = 0;
-uint32_t last_button3_time = 0;
+// VArijable za debouncing s TIM16
+volatile uint32_t button1_debounce_time = 0;
+volatile uint32_t button2_debounce_time = 0;
+volatile uint32_t button3_debounce_time = 0;
 #define DEBOUNCE_DELAY 50 // 50ms
+#define TIM16_PERIOD_MS 1 // Perioda TIM16 timer-a u ms
 
 // Varijable za pracenje najblizeg objekta u modu 3
 uint32_t closest_distance = 0;
@@ -290,35 +292,72 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
     }
 }
 
-// Interrupti za tipkala
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-    uint32_t current_time = HAL_GetTick();
+// TIM16 callback za debounce
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+    if (htim->Instance == TIM16) {
+        static uint8_t button1_prev_state = 0;
+        static uint8_t button2_prev_state = 0;
+        static uint8_t button3_prev_state = 0;
 
-    if(GPIO_Pin == BUTTON1_Pin) {
-        if(current_time - last_button1_time > DEBOUNCE_DELAY) {
-            button1_pressed = 1;
-            last_button1_time = current_time;
+        // Pročitaj trenutna stanja tipki
+        uint8_t button1_state = HAL_GPIO_ReadPin(BUTTON1_GPIO_Port, BUTTON1_Pin);
+        uint8_t button2_state = HAL_GPIO_ReadPin(BUTTON2_GPIO_Port, BUTTON2_Pin);
+        uint8_t button3_state = HAL_GPIO_ReadPin(BUTTON3_GPIO_Port, BUTTON3_Pin);
+
+        // Button 1 debounce
+        if (button1_state != button1_prev_state) {
+            button1_debounce_time++;
+            if (button1_debounce_time >= (DEBOUNCE_DELAY / TIM16_PERIOD_MS)) {
+                if (button1_state == GPIO_PIN_SET) {
+                    button1_pressed_flag = 1;
+                }
+                button1_prev_state = button1_state;
+                button1_debounce_time = 0;
+            }
+        } else {
+            button1_debounce_time = 0;
         }
-    }
-    else if(GPIO_Pin == BUTTON2_Pin) {
-        if(current_time - last_button2_time > DEBOUNCE_DELAY) {
-            button2_pressed = 1;
-            last_button2_time = current_time;
+
+        // Button 2 debounce
+        if (button2_state != button2_prev_state) {
+            button2_debounce_time++;
+            if (button2_debounce_time >= (DEBOUNCE_DELAY / TIM16_PERIOD_MS)) {
+                if (button2_state == GPIO_PIN_SET) {
+                    button2_pressed_flag = 1;
+                }
+                button2_prev_state = button2_state;
+                button2_debounce_time = 0;
+            }
+        } else {
+            button2_debounce_time = 0;
         }
-    }
-    else if(GPIO_Pin == BUTTON3_Pin) {
-        if(current_time - last_button3_time > DEBOUNCE_DELAY) {
-            button3_pressed = 1;
-            last_button3_time = current_time;
+
+        // Button 3 debounce
+        if (button3_state != button3_prev_state) {
+            button3_debounce_time++;
+            if (button3_debounce_time >= (DEBOUNCE_DELAY / TIM16_PERIOD_MS)) {
+                if (button3_state == GPIO_PIN_SET) {
+                    button3_pressed_flag = 1;
+                }
+                button3_prev_state = button3_state;
+                button3_debounce_time = 0;
+            }
+        } else {
+            button3_debounce_time = 0;
         }
     }
 }
 
+// Inicijalizacija TIM16 za debounce
+void Debounce_Timer_Init(void) {
+    HAL_TIM_Base_Start_IT(&htim16);
+}
+
 // funkcija za kad su pritisnute tipke
 void Handle_Button_Presses(void) {
-    if(button1_pressed) {
+    if(button1_pressed_flag) {
         operation_mode = 1;
-        button1_pressed = 0;
+        button1_pressed_flag = 0;
         mode2_active = 0;
         mode2_servo_stopped = 0;
         Object_Detected = 0;
@@ -329,9 +368,9 @@ void Handle_Button_Presses(void) {
         Laser_Control(0);
         Update_Mode_LEDs();
     }
-    else if(button2_pressed) {
+    else if(button2_pressed_flag) {
         operation_mode = 2;
-        button2_pressed = 0;
+        button2_pressed_flag = 0;
         mode2_active = 0;
         mode2_servo_stopped = 0;
         Object_Detected = 0;
@@ -342,9 +381,9 @@ void Handle_Button_Presses(void) {
         Laser_Control(0);
         Update_Mode_LEDs();
     }
-    else if(button3_pressed) {
+    else if(button3_pressed_flag) {
         operation_mode = 3;
-        button3_pressed = 0;
+        button3_pressed_flag = 0;
         mode2_active = 0;
         mode2_servo_stopped = 0;
         Object_Detected = 0;
@@ -365,10 +404,13 @@ int main(void) {
     MX_GPIO_Init();
     MX_TIM2_Init();
     MX_TIM14_Init();
-
+    MX_TIM16_Init();  // Inicijaliziraj TIM16
 
     HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
     HAL_TIM_PWM_Start(&htim14, TIM_CHANNEL_1);
+
+    // Inicijaliziraj TIM16 za debounce
+    Debounce_Timer_Init();
 
     // Postavljanje polariteta input capture za HC-SR04
     __HAL_TIM_SET_CAPTUREPOLARITY(&htim2, TIM_CHANNEL_1, TIM_INPUTCHANNELPOLARITY_RISING);
